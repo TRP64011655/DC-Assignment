@@ -19,7 +19,7 @@ MULTICAST_TTL = 2
 NAME = os.environ.get("NAME")
 RESEND_ATTEMP = 3
 ALONE_STATUS = True
-
+STATE_FROM_OTHER = {}
 
 def categorizeData(data):
     return (data.split(':')[0], data.split(':')[1])
@@ -37,7 +37,10 @@ def getStateFromLocal():
             file.write(timestamp)
             print("Created state.txt with current timestamp.")
     return timestamp
-        
+
+def setState(state):
+    with open("state.txt", "w") as file:
+        file.write(state)
 
 def send_ts_broadcast():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -58,9 +61,6 @@ def send_ts_broadcast():
         except socket.timeout:
             print("Resending the TS.")
             continue  # Continue to next iteration without waiting
-        
-        
-        
         
         
 # Peer discovery and acknowledgment
@@ -93,7 +93,10 @@ def peer_communication():
             print("GET_STATE as", message)
             send_ts_broadcast()
         elif type == "SEND_STATE":
-            print("SEND_STATE", message)
+            print("SEND_STATE as", message)
+            STATE_FROM_OTHER[sender_ip] = message
+            
+            setState(max)
             state_recieved_message = f"State recieved from {NAME}'s notebook"
             sock.sendto(state_recieved_message.encode(), address)
         else:
