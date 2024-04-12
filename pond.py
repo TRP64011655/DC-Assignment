@@ -23,7 +23,20 @@ ALONE_STATUS = True
 
 def categorizeData(data):
     return (data.split(':')[0], data.split(':')[1])
-    
+
+def getStateFromLocal():
+    try:
+        # Try to read timestamp from state.txt
+        with open("state.txt", "r") as file:
+            timestamp = file.read().strip()
+            print("Timestamp from state.txt:", timestamp)
+    except FileNotFoundError:
+        # If state.txt doesn't exist, create it with current timestamp
+        timestamp = str(time.time())
+        with open("state.txt", "w") as file:
+            file.write(timestamp)
+            print("Created state.txt with current timestamp.")
+
 # Peer discovery and acknowledgment
 def peer_communication():
     receiver_ip = services.get_ip_address()
@@ -43,21 +56,25 @@ def peer_communication():
             # Ignore the message from itself
             continue
         type, message = categorizeData(data.decode()) 
-        if type == "Greeting":
-            print("Recieved Greeting as:", message)  
+        if type == "GREETING":
+            acknowledgment_message = f"ACK from {NAME}'s notebook"
+            sock.sendto(acknowledgment_message.encode(), address)
+            print("GREETING as:", message)  
         elif type == "ACK":
-            print("ACK from", sender_ip)
+            print("ACK as", sender_ip)
+        elif type == "GET_STATE":
+            getStateFromLocal()
+            print("GET_STATE as", message)
+        else:
+            print(data.decode())
         
-        # print(f"Received multicast message from {sender_ip}:", data.decode())
-        acknowledgment_message = f"ACK from {NAME}'s notebook"
-        sock.sendto(acknowledgment_message.encode(), address)
 
 # Peer broadcasting using multicast
 def greeting_broadcast():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
 
-    message = f"Greeting: I'm {NAME}!"
+    message = f"GREETING: I'm {NAME}!"
     retry_count = 0
     while retry_count < RESEND_ATTEMP:  # Retry only twice
         sock.sendto(message.encode(), (MULTICAST_GROUP, MULTICAST_PORT))
@@ -68,6 +85,8 @@ def greeting_broadcast():
         try:
             acknowledgment, _ = sock.recvfrom(1024)
             print(f"ACK: {acknowledgment.decode()}")
+            message = f"GET_STATE: request for state from {NAME}!"
+            sock.sendto(message.encode(), (MULTICAST_GROUP, MULTICAST_PORT))
             break  # Exit the loop if acknowledgment received
         except socket.timeout:
             print("Resending the request.")
@@ -76,17 +95,7 @@ def greeting_broadcast():
 
     if retry_count == RESEND_ATTEMP:
         print("I'm alone.")
-        try:
-            # Try to read timestamp from state.txt
-            with open("state.txt", "r") as file:
-                timestamp = file.read().strip()
-                print("Timestamp from state.txt:", timestamp)
-        except FileNotFoundError:
-            # If state.txt doesn't exist, create it with current timestamp
-            timestamp = str(time.time())
-            with open("state.txt", "w") as file:
-                file.write(timestamp)
-                print("Created state.txt with current timestamp.")
+        getStateFromLocal()
 
 if __name__ == "__main__":
     # Start peer communication thread
