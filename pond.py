@@ -29,14 +29,40 @@ def getStateFromLocal():
         # Try to read timestamp from state.txt
         with open("state.txt", "r") as file:
             timestamp = file.read().strip()
-            print("Timestamp from state.txt:", timestamp)
+            # print("Timestamp from state.txt:", timestamp)
     except FileNotFoundError:
         # If state.txt doesn't exist, create it with current timestamp
         timestamp = str(time.time())
         with open("state.txt", "w") as file:
             file.write(timestamp)
             print("Created state.txt with current timestamp.")
+    return timestamp
+        
 
+def send_ts_broadcast():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
+    
+    ts = getStateFromLocal()
+    message = f'SEND_STATE:{ts}'
+    
+    while True:
+        sock.sendto(message.encode(), (MULTICAST_GROUP, MULTICAST_PORT))
+
+        # Set a timeout for receiving acknowledgment
+        sock.settimeout(3)  # 3 seconds timeout
+        try:
+            acknowledgment, _ = sock.recvfrom(1024)
+            print(f"ACK: {acknowledgment.decode()}")
+            break  # Exit the loop if acknowledgment received
+        except socket.timeout:
+            print("Resending the TS.")
+            continue  # Continue to next iteration without waiting
+        
+        
+        
+        
+        
 # Peer discovery and acknowledgment
 def peer_communication():
     receiver_ip = services.get_ip_address()
@@ -57,17 +83,22 @@ def peer_communication():
             continue
         type, message = categorizeData(data.decode()) 
         if type == "GREETING":
+            print("GREETING as:", message)  
             acknowledgment_message = f"ACK from {NAME}'s notebook"
             sock.sendto(acknowledgment_message.encode(), address)
-            print("GREETING as:", message)  
+            
         elif type == "ACK":
             print("ACK as", sender_ip)
         elif type == "GET_STATE":
-            getStateFromLocal()
             print("GET_STATE as", message)
+            send_ts_broadcast()
+        elif type == "SEND_STATE":
+            print("SEND_STATE", message)
+            state_recieved_message = f"State recieved from {NAME}'s notebook"
+            sock.sendto(state_recieved_message.encode(), address)
         else:
             print(data.decode())
-        
+
 
 # Peer broadcasting using multicast
 def greeting_broadcast():

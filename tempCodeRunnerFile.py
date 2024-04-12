@@ -1,2 +1,1 @@
-.decode()) == "Greeting":
-            print("Recieved G
+time_stamp_message
